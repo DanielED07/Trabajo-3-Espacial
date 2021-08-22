@@ -1,0 +1,209 @@
+---
+title: "Parcial 3"
+author: "Daniel Escobar David"
+date: "11/8/2021"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,warning = F,message = F)
+```
+
+```{r}
+library(spatstat)
+library(geoR)
+library(gstat)
+library(sp)
+library(raster)
+library(rgdal)
+library(viridis)
+library(sf)
+library(ggmap)
+library(tidyverse)
+library(gridExtra)
+library(maptools)
+```
+
+# Lectura de datos
+```{r}
+load("data_chicago.RData")
+```
+
+# Seleccion de datos
+
+```{r}
+#PROSTITUTION
+#JUVENILE PIMPING
+df_1 <- datos_completos %>% filter(Primary.Type=='NARCOTICS') %>%
+  filter(Description=='POSS: CANNABIS 30GMS OR LESS')
+
+borde <- read.csv("./03_border_chicago.txt")
+
+#df_1 <- datos_completos %>% filter(Primary.Type=='NARCOTICS') %>% filter(Description=='CANNABIS PLANT')
+```
+
+```{r}
+library(lubridate)
+
+
+#sort from least recent to most recent 
+q <- df_1 %>% arrange(mdy(df_1$Date))
+q$Date <- mdy_hms(q$Date)
+q1 <- q %>% arrange(q$Date)
+q2 <- q1 %>% mutate(Year = format(Date, '%Y'), Month_Number = format(Date, '%m'))
+
+q3 <- q2 %>% group_by(Year,Month_Number) %>% 
+  summarise(n=n())
+
+q3$Month_Number <- as.numeric(q3$Month_Number)
+
+write.csv2(q3,file="q3.csv",row.names = F)
+
+ggplot(q3,aes(x=Month_Number,y=n,group=Year))+
+  geom_line(aes(color=Year))+geom_point(aes(color=Year))
+
+q4 <- q2[q2$Year=="2007",]
+q4 <- q4 %>% select(District,Latitude,Longitude)
+q4$District <- as.character(q4$District)
+write.table(q4, file = "q4.txt", row.names = FALSE, dec = ".", sep = ";")
+
+
+```
+
+# Grafica
+
+```{r}
+chicago_border <-SpatialPolygons(list(Polygons(list(Polygon( borde )), "x")))
+chicago_border <- st_as_sf(chicago_border)
+st_crs(chicago_border) = 4326
+#Change coordinate systems
+chicago_campo <- st_transform(chicago_border,4326)
+
+chicago_espacial <- st_as_sf(na.omit(q4), coords = c("Longitude", "Latitude"), crs = 4326, agr = "constant")
+
+ggplot() + 
+  geom_sf(data = chicago_campo) + 
+  geom_sf(data = chicago_espacial) + 
+  theme(legend.position = "none",
+        panel.grid = element_blank(),
+        axis.title = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank(),
+        panel.background = element_blank())
+```
+
+
+# Spatstat
+
+
+
+```{r}
+chicago_borde_proj <- st_transform(chicago_border, 3857)
+coords_borde_chicago <- chicago_borde_proj[[1]][[1]][[1]]
+n <- length(coords_borde_chicago[,1]) - 1
+ 
+# CREAR 2 VECTORES: x Y y
+# ESTOS CONTENDRAN LOS VERTICES REVERSADOS, MENOS EL ULTIMO PUNTO
+# in order to adhere to the spatstat specs: no repeating points, in counter-clockwise order
+x <- rev(coords_borde_chicago[,1][1:n])
+y <- rev(coords_borde_chicago[,2][1:n])
+window <- owin(poly=list(x=x,y=y))
+plot(window)
+
+chicago_espacial_trans <- st_transform(chicago_espacial, 3857) #we must transform these too to match our window in BNG
+sf_chicago_espacial_coords <- matrix(unlist(chicago_espacial_trans$geometry), ncol = 2, byrow = T)
+
+chicago_ppp <- ppp(x = sf_chicago_espacial_coords[,1], y = sf_chicago_espacial_coords[,2],
+                   window = window, check = T)
+plot(chicago_ppp)
+
+# FILTRAR DATOS FUERA DEL CONTORNO
+ok <- inside.owin(x=chicago_ppp$x,y=chicago_ppp$y,w=window)
+pp.in <- data.frame(x=chicago_ppp$x[ok],y=chicago_ppp$y[ok])
+pcg <- ppp(x=pp.in$x,y=pp.in$y,window=window)
+
+plot(pcg)
+
+qc.loc.in <- quadratcount(pcg, nx=5, ny=4)
+plot(pcg, pch=3, cex=0.6)
+plot(qc.loc.in, add=T, textargs = list(col='red'))
+```
+
+```{r}
+quadrat.test(qc.loc.in)
+```
+
+Un _p_-valor muy pequeño indica que la intesidad es no-constante.
+
+
+# Estimación Densidad Kernel
+
+```{r}
+par(mfrow=c(1,3))
+sigma <- c(1000, 2500, 5000)
+for (i in 1:3){
+    ds <- density.ppp(pcg, sigma=sigma[i])
+    plot(ds, main = paste0( "sigma:" ,  sigma[i]))
+    plot(pcg, add=T, cex=0.01, regular=F)
+}
+
+# POR DEFECTO ES EL KERNEL GAUSSUSIANO
+```
+
+
+Spatat esta tiene diferentes funciones para determinar el ancho de banda
+
+```{r}
+plot(density.ppp(pcg)) # POR DEFECTO
+plot(pcg, add=T, cex=0.01, regular=F) 
+```
+
+```{r}
+diggle <- bw.diggle(pcg) # DIGGLE
+LH_CV <- bw.ppl(pcg) # LIKELIHOOD CROSS VALIDATION
+scoot <- bw.scott(pcg) # SCOTT
+
+print(c(diggle,LH_CV,scoot))
+```
+```{r}
+par(mfrow=c(2,2))
+sigma <- c(diggle,LH_CV,scoot)
+names <- c("Diggle","Likelihood Cross Validation","Scott 1","Scott 2")
+for (i in 1:4){
+    ds <- density.ppp(pcg, sigma=sigma[i])
+    plot(ds, main = names[i])
+    plot(pcg, add=T, cex=0.01, regular=F)
+}
+```
+
+ Utilizamos scott 2, ahora vamos a variar el kernel:
+ 
+```{r}
+par(mfrow=c(2,2))
+names <- c("gaussian","epanechnikov","quartic","disc")
+for (i in 1:4){
+    ds <- density.ppp(pcg,kernel = names[i], sigma=scoot[2])
+    plot(ds, main = names[i])
+    plot(pcg, add=T, cex=0.01, regular=F)
+}
+```
+  
+
+```{r}
+par(mfrow=c(2,2))
+plot(density.ppp(pcg,kernel = "gaussian", sigma=scoot[2]),main="gaussian")
+plot(density.ppp(pcg,kernel = "epanechnikov", sigma=scoot[2]),main="epanechnikov")
+plot(density.ppp(pcg,kernel = "quartic", sigma=scoot[2]),main="quartic")
+plot(density.ppp(pcg,kernel = "disc", sigma=scoot[2]),main="disc")
+```
+
+Fryplot
+```{r}
+ktheft <- Kest(chicago_ppp)
+ketheft <- envelope(chicago_ppp, Kest,nsim = 39, fix.n = TRUE)
+
+par(mfrow=c(1,2))
+plot(ktheft)
+plot(ketheft)
+```
+
