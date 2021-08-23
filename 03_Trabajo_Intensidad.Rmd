@@ -22,12 +22,13 @@ library(ggmap)
 library(tidyverse)
 library(gridExtra)
 library(maptools)
+library(lubridate)
 ```
 
 # Lectura de datos
 ```{r}
-#load("data_chicago.RData")
 rm(list=ls())
+#load("03_data_chicago.RData")
 ```
 
 # Seleccion de datos
@@ -44,7 +45,7 @@ rm(list=ls())
 ```
 
 ```{r}
-library(lubridate)
+
 
 
 #sort from least recent to most recent 
@@ -63,7 +64,7 @@ library(lubridate)
 #ggplot(q3,aes(x=Month_Number,y=n,group=Year))+
   #geom_line(aes(color=Year))+geom_point(aes(color=Year))
 
-#q4 <- q2[q2$Year=="2007",]
+#q4 <- q2[q2$Year=="2014" & q2$Month_Number==12,]
 #q4 <- q4 %>% select(District,Latitude,Longitude)
 #q4$District <- as.character(q4$District)
 #write.table(q4, file = "q4.txt", row.names = FALSE, dec = ".", sep = ";")
