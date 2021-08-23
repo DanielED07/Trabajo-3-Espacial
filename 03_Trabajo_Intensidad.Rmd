@@ -26,7 +26,8 @@ library(maptools)
 
 # Lectura de datos
 ```{r}
-load("data_chicago.RData")
+#load("data_chicago.RData")
+rm(list=ls())
 ```
 
 # Seleccion de datos
@@ -34,10 +35,10 @@ load("data_chicago.RData")
 ```{r}
 #PROSTITUTION
 #JUVENILE PIMPING
-df_1 <- datos_completos %>% filter(Primary.Type=='NARCOTICS') %>%
-  filter(Description=='POSS: CANNABIS 30GMS OR LESS')
+#df_1 <- datos_completos %>% filter(Primary.Type=='NARCOTICS') %>%
+  #filter(Description=='POSS: CANNABIS 30GMS OR LESS')
 
-borde <- read.csv("./03_border_chicago.txt")
+
 
 #df_1 <- datos_completos %>% filter(Primary.Type=='NARCOTICS') %>% filter(Description=='CANNABIS PLANT')
 ```
@@ -47,27 +48,28 @@ library(lubridate)
 
 
 #sort from least recent to most recent 
-q <- df_1 %>% arrange(mdy(df_1$Date))
-q$Date <- mdy_hms(q$Date)
-q1 <- q %>% arrange(q$Date)
-q2 <- q1 %>% mutate(Year = format(Date, '%Y'), Month_Number = format(Date, '%m'))
+#q <- df_1 %>% arrange(mdy(df_1$Date))
+#q$Date <- mdy_hms(q$Date)
+#q1 <- q %>% arrange(q$Date)
+#q2 <- q1 %>% mutate(Year = format(Date, '%Y'), Month_Number = format(Date, '%m'))
 
-q3 <- q2 %>% group_by(Year,Month_Number) %>% 
-  summarise(n=n())
+#q3 <- q2 %>% group_by(Year,Month_Number) %>% 
+  #summarise(n=n())
 
-q3$Month_Number <- as.numeric(q3$Month_Number)
+#q3$Month_Number <- as.numeric(q3$Month_Number)
 
-write.csv2(q3,file="q3.csv",row.names = F)
+#write.csv2(q3,file="q3.csv",row.names = F)
 
-ggplot(q3,aes(x=Month_Number,y=n,group=Year))+
-  geom_line(aes(color=Year))+geom_point(aes(color=Year))
+#ggplot(q3,aes(x=Month_Number,y=n,group=Year))+
+  #geom_line(aes(color=Year))+geom_point(aes(color=Year))
 
-q4 <- q2[q2$Year=="2007",]
-q4 <- q4 %>% select(District,Latitude,Longitude)
-q4$District <- as.character(q4$District)
-write.table(q4, file = "q4.txt", row.names = FALSE, dec = ".", sep = ";")
+#q4 <- q2[q2$Year=="2007",]
+#q4 <- q4 %>% select(District,Latitude,Longitude)
+#q4$District <- as.character(q4$District)
+#write.table(q4, file = "q4.txt", row.names = FALSE, dec = ".", sep = ";")
 
-
+q4 <- read.table("q4.txt",header = T,sep=";") #datos chicago
+borde <- read.csv("./03_border_chicago.txt")
 ```
 
 # Grafica
